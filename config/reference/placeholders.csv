@@ -1,0 +1,26 @@
+kind,value
+email_local,test
+email_local,noemail
+email_local,no-email
+email_local,none
+email_local,na
+email_local,dummy
+email_local,abc
+email_local,xyz
+email_local,noreply
+email_domain,example.com
+email_domain,test.com
+email_domain,noemail.com
+phone,0000000000
+phone,1111111111
+phone,1234567890
+phone,9999999999
+phone,9876543210
+name,test
+name,dummy
+name,customer
+name,walk in
+name,walk-in
+name,na
+name,unknown
+name,xxx

@@ -1,0 +1,84 @@
+// Measures for sm_golden_customer. Paste into a measure table (Model view -> New measure).
+// Table names assume the current-only table `gld_customer_current` (see semantic_model.md).
+
+// ---------------------------------------------------------------- golden record KPIs
+Golden Customers = COUNTROWS ( gld_customer_current )
+
+Source Records = COUNTROWS ( gld_customer_xref )
+
+Duplicate Reduction % =
+DIVIDE ( [Source Records] - [Golden Customers], [Source Records] )
+
+Multi-Source Customers =
+CALCULATE ( [Golden Customers], gld_customer_current[source_record_count] > 1 )
+
+High Confidence Share % =
+DIVIDE (
+    CALCULATE ( [Golden Customers], gld_customer_current[confidence_band] IN { "HIGH", "SINGLE" } ),
+    [Golden Customers]
+)
+
+Contactable by Email =
+CALCULATE ( [Golden Customers], gld_customer_current[consent_email] = "yes", NOT ISBLANK ( gld_customer_current[email] ) )
+
+Consent Coverage % =
+DIVIDE (
+    CALCULATE ( [Golden Customers], gld_customer_current[consent_email] = "yes" || gld_customer_current[consent_sms] = "yes" || gld_customer_current[consent_whatsapp] = "yes" ),
+    [Golden Customers]
+)
+
+// ---------------------------------------------------------------- spend (orders)
+Revenue = SUM ( gld_order[amount] )
+
+Revenue per Golden Customer = DIVIDE ( [Revenue], [Golden Customers] )
+
+Unmatched Order Revenue = CALCULATE ( [Revenue], gld_order[is_unmatched] = TRUE () )
+
+// ---------------------------------------------------------------- campaign waste
+Sends = COUNTROWS ( gld_engagement )
+
+Campaign Cost = SUM ( gld_engagement[cost] )
+
+Duplicate Sends = CALCULATE ( [Sends], gld_engagement[duplicate_send] = TRUE () )
+
+Duplicate Send Cost = CALCULATE ( [Campaign Cost], gld_engagement[duplicate_send] = TRUE () )
+
+Sends Without Consent = CALCULATE ( [Sends], gld_engagement[sent_without_consent] = TRUE () )
+
+Wasted Spend = [Duplicate Send Cost] + CALCULATE ( [Campaign Cost], gld_engagement[sent_without_consent] = TRUE (), gld_engagement[duplicate_send] = FALSE () )
+
+Wasted Spend % = DIVIDE ( [Wasted Spend], [Campaign Cost] )
+
+Reach (People) = DISTINCTCOUNT ( gld_engagement[master_key] )
+
+Reach Overstatement % = DIVIDE ( [Sends] - [Reach (People)], [Sends] )
+
+// ---------------------------------------------------------------- data quality scorecard
+Latest Run Ts = MAX ( ops_dq_results[run_ts] )
+
+DQ Pass Rate (Latest) =
+VAR _ts = [Latest Run Ts]
+RETURN CALCULATE ( AVERAGE ( ops_dq_results[pass_rate] ), ops_dq_results[run_ts] = _ts )
+
+DQ Rules Failing (Latest) =
+VAR _ts = [Latest Run Ts]
+RETURN CALCULATE ( COUNTROWS ( ops_dq_results ), ops_dq_results[run_ts] = _ts, ops_dq_results[ok] = FALSE () )
+
+Quarantined Records = COUNTROWS ( slv_quarantine )
+
+// Metric value for the latest run vs the baseline (first run): select a metric in a slicer.
+Metric Latest =
+VAR _ts = MAX ( ops_run_metrics[run_ts] )
+RETURN CALCULATE ( MAX ( ops_run_metrics[value] ), ops_run_metrics[run_ts] = _ts )
+
+Metric Baseline = MAX ( ops_run_metrics[baseline] )
+
+Metric Change = [Metric Latest] - [Metric Baseline]
+
+Open Alerts =
+VAR _ts = MAX ( ops_run_metrics[run_ts] )
+RETURN CALCULATE ( COUNTROWS ( ops_run_metrics ), ops_run_metrics[run_ts] = _ts, ops_run_metrics[alert] = TRUE () )
+
+// ---------------------------------------------------------------- calendar (calculated table)
+// dim_date = ADDCOLUMNS ( CALENDAR ( DATE ( 2024, 1, 1 ), DATE ( 2027, 12, 31 ) ),
+//     "Year", YEAR ( [Date] ), "Month", FORMAT ( [Date], "YYYY-MM" ), "Week", WEEKNUM ( [Date], 2 ) )

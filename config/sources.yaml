@@ -1,0 +1,130 @@
+# Source registry: how each extract maps onto the canonical customer model.
+# Adding a source = adding a block here (no code change). Mapping values are the
+# column names in the source extract; omit a canonical field the source does not have.
+# `trust` drives survivorship: higher wins when rules prefer the most trusted source.
+
+sources:
+  erp_a:
+    description: ERP A customer master (SAP-style sold-to)
+    format: csv
+    path: erp_a/customers*.csv
+    options: { header: "true" }
+    trust: 80
+    id_column: KUNNR
+    updated_at_column: AEDAT
+    mapping:
+      full_name: NAME1
+      email: SMTP_ADDR
+      phone: TELF1
+      address_line: STRAS
+      city: ORT01
+      postcode: PSTLZ
+      country: LAND1
+      tax_id: STCD1
+    orders:
+      path: erp_a/orders*.csv
+      id_column: VBELN
+      customer_column: KUNNR
+      date_column: ERDAT
+      amount_column: NETWR
+      channel: retail
+
+  erp_b:
+    description: ERP B customer master (Oracle-style)
+    format: csv
+    path: erp_b/customers*.csv
+    options: { header: "true" }
+    trust: 75
+    id_column: CUST_ACCOUNT_ID
+    updated_at_column: LAST_UPDATE_DATE
+    mapping:
+      full_name: PARTY_NAME
+      email: EMAIL_ADDRESS
+      phone: PHONE_NUMBER
+      address_line: ADDRESS1
+      city: CITY
+      postcode: POSTAL_CODE
+      country: COUNTRY
+      tax_id: TAX_REFERENCE
+    orders:
+      path: erp_b/orders*.csv
+      id_column: ORDER_NUMBER
+      customer_column: CUST_ACCOUNT_ID
+      date_column: ORDERED_DATE
+      amount_column: ORDER_AMOUNT
+      channel: online
+
+  crm:
+    description: CRM contacts (system of record for consent)
+    format: csv
+    path: crm/contacts*.csv
+    options: { header: "true" }
+    trust: 90
+    id_column: ContactId
+    updated_at_column: ModifiedOn
+    mapping:
+      first_name: FirstName
+      last_name: LastName
+      email: Email
+      phone: MobilePhone
+      address_line: Street
+      city: City
+      postcode: PostalCode
+      country: Country
+      consent_email: EmailOptIn
+      consent_sms: SmsOptIn
+      consent_whatsapp: WhatsAppOptIn
+
+  web:
+    description: Web and marketplace sign-ups
+    format: json
+    path: web/signups*.json
+    options: { multiLine: "false" }
+    trust: 50
+    id_column: signup_id
+    updated_at_column: created_at
+    mapping:
+      full_name: full_name
+      email: email
+      phone: phone
+      city: city
+      postcode: pincode
+      consent_email: marketing_opt_in
+
+  pos_loyalty:
+    description: Retail POS loyalty members
+    format: csv
+    path: pos_loyalty/members*.csv
+    options: { header: "true" }
+    trust: 60
+    id_column: member_id
+    updated_at_column: last_visit
+    mapping:
+      full_name: member_name
+      phone: mobile
+      postcode: store_pin
+      city: store_city
+      loyalty_id: card_no
+      consent_sms: sms_ok
+
+  mobile:
+    description: Mobile app profiles
+    format: json
+    path: mobile/profiles*.json
+    options: { multiLine: "false" }
+    trust: 55
+    id_column: app_user_id
+    updated_at_column: updated_at
+    mapping:
+      first_name: given_name
+      last_name: family_name
+      email: email
+      phone: phone
+      loyalty_id: loyalty_card
+      consent_whatsapp: push_whatsapp
+
+engagement:
+  description: Campaign sends from the marketing platform (keyed by source record)
+  format: csv
+  path: engagement/sends*.csv
+  options: { header: "true" }

@@ -1,0 +1,56 @@
+# The six data quality rules. The same definitions are configured in Purview
+# (fabric/governance/purview_dq_rules.md) for the published scorecard; the pipeline
+# also evaluates them as a gate before Gold is published.
+#
+# check types: not_null, regex, unique, in_set, mandatory (all `columns` + any of `any_of`)
+# blocking: true -> a failure below threshold holds promotion to Gold
+
+rules:
+  - id: DQ01
+    name: Valid email format
+    column: email
+    check: regex
+    pattern: '^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$'
+    allow_null: true
+    threshold: 0.99
+    blocking: true
+
+  - id: DQ02
+    name: Valid phone format (E.164)
+    column: phone_e164
+    check: regex
+    pattern: '^\+[1-9][0-9]{7,14}$'
+    allow_null: true
+    threshold: 0.97
+    blocking: true
+
+  - id: DQ03
+    name: Master key is unique
+    column: master_key
+    check: unique
+    threshold: 1.0
+    blocking: true
+
+  - id: DQ04
+    name: Mandatory fields complete (name and at least one contact)
+    columns: [last_name]
+    any_of: [email, phone_e164]
+    check: mandatory
+    threshold: 0.95
+    blocking: false
+
+  - id: DQ05
+    name: Consent recorded for every channel
+    columns: [consent_email, consent_sms, consent_whatsapp]
+    check: not_null
+    threshold: 1.0
+    blocking: true
+
+  - id: DQ06
+    name: Valid country code
+    column: country
+    check: in_set
+    reference: config/reference/countries.csv
+    allow_null: true
+    threshold: 0.99
+    blocking: false

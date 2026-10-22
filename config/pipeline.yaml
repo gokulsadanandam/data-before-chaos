@@ -1,0 +1,107 @@
+# Pipeline configuration. Everything a data owner may want to tune lives here,
+# not in code. Values marked "starting value" are confirmed after the day 1 baseline.
+
+entity: customer            # customer | vendor (see docs/adapting-to-vendor-data.md)
+master_key_prefix: "C-"
+master_key_digits: 6
+
+# Logical table names. In Fabric these are Lakehouse tables; locally, folders.
+tables:
+  bronze_prefix: brz_                 # brz_<source>
+  bronze_orders_prefix: brz_orders_   # brz_orders_<source>
+  bronze_engagement: brz_engagement
+  silver_clean: slv_customer_clean
+  silver_quarantine: slv_quarantine
+  silver_identifier_profile: slv_identifier_profile
+  silver_candidates: slv_match_candidate
+  silver_links: slv_match_link
+  silver_do_not_match: slv_do_not_match
+  silver_cluster_issue: slv_cluster_issue
+  review_outbox: rvw_review_queue_outbox       # copied to the Fabric SQL database by the pipeline
+  review_decisions: rvw_decision_log           # OneLake shortcut to the SQL database's mirrored decision_log
+  gold_customer: gld_customer
+  gold_customer_current: gld_customer_current   # current versions only (Direct Lake / Power BI)
+  gold_xref: gld_customer_xref
+  gold_key_registry: gld_master_key_registry
+  gold_audit: gld_dq_audit
+  gold_orders: gld_order
+  gold_engagement: gld_engagement
+  ops_run_metrics: ops_run_metrics
+  ops_dq_results: ops_dq_results
+  ops_labelled_pairs: ops_labelled_pairs
+  ops_eval_results: ops_eval_results
+
+standardisation:
+  default_country: IN
+  default_calling_code: "91"
+  min_phone_digits: 8
+  max_phone_digits: 15
+
+tokenisation:
+  # HMAC-SHA256 over normalised identifiers. In Fabric the key comes from Key Vault.
+  key_vault_uri: "https://<your-key-vault>.vault.azure.net/"
+  key_secret_name: "goldenrecord-token-key"
+  local_dev_key: "local-dev-only-not-a-secret"   # used only by the local runner and tests
+
+identifier_profile:
+  household_max_first_names: 4     # 2..N different first names on one identifier = household
+  shared_min_first_names: 5        # N+ different first names = shared / generic, ignored for matching
+
+blocking:
+  max_block_size: 200              # blocks larger than this are skipped and logged (e.g. placeholder values)
+  keys:
+    - email_token
+    - phone_token
+    - loyalty_id
+    - tax_id
+    - surname_soundex_postcode
+    - email_domain_first_initial_city
+
+matching:
+  # Logistic scoring: score = sigmoid(intercept + sum(weight * feature)).
+  # Day 1 weights are expert-set; tools/notebooks retrain them from steward labels.
+  intercept: -4.0
+  weights:
+    email_exact: 4.5
+    phone_exact: 3.5
+    loyalty_exact: 4.0
+    tax_exact: 5.0
+    first_name_sim: 2.2
+    last_name_sim: 2.6
+    surname_phonetic_eq: 0.8
+    address_sim: 1.6
+    postcode_eq: 0.9
+    city_eq: 0.4
+    email_local_sim: 1.0
+    email_conflict: -2.0          # both have an email and they differ
+    phone_conflict: -2.0          # both have a phone and they differ
+    household_conflict: -5.0      # same strong identifier, clearly different first name
+    tax_conflict: -9.0            # both sides have a tax ID and they differ
+  min_candidate_score: 0.40       # below this a pair is a non-match and is not stored
+  auto_merge_requires_identifier: true   # name + location alone never auto-merges (goes to review)
+  bands:                          # starting values, calibrated on the labelled sample
+    high: 0.90                    # >= high: auto-merge
+    medium: 0.75                  # >= medium and < high: auto-merge + spot-check sample
+  spot_check_rate: 0.10
+  ai:
+    enabled: true
+    lower: 0.50                   # pairs with score in [lower, upper) are sent to AI functions
+    upper: 0.90
+    blend_weight: 0.30            # final = (1 - w) * model_score + w * ai_signal
+    labels: ["same person", "different person"]
+
+clustering:
+  max_iterations: 20
+  max_cluster_size: 25            # larger clusters are held for review (chaining guard)
+
+dq_gate:
+  # Promotion to Gold is held if any blocking rule falls below its threshold.
+  rules_file: config/dq_rules.yaml
+
+alerts:
+  quarantine_rate_delta_points: 5.0     # alert if quarantine rate is 5+ points above the baseline run
+  review_rate_delta_points: 5.0
+
+evaluation:
+  labelled_sample_size: 300
+  min_true_matches: 150

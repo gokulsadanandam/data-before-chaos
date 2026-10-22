@@ -1,0 +1,26 @@
+# Survivorship: how one winning value per attribute is chosen from a cluster of
+# source records that describe the same customer.
+#
+# Strategies (implemented in goldenrecord/survivorship.py):
+#   most_trusted          highest source trust, then most recent
+#   most_recent           latest source updated_at, then highest trust
+#   most_frequent         most common value, then highest trust
+#   longest_complete      longest value from the most trusted source tier
+#   source_of_record      value from the named source if present, else fallback strategy
+#   most_restrictive      consent: any explicit "no" wins; "yes" only if no "no";
+#                         no explicit value at all -> "no" (missing consent counts as No)
+
+attributes:
+  first_name:       { strategy: longest_complete }
+  last_name:        { strategy: longest_complete }
+  email:            { strategy: most_trusted }
+  phone_e164:       { strategy: most_trusted }
+  address_line:     { strategy: most_recent }
+  city:             { strategy: most_recent }
+  postcode:         { strategy: most_recent }
+  country:          { strategy: most_frequent }
+  tax_id:           { strategy: most_trusted }
+  loyalty_id:       { strategy: source_of_record, source: pos_loyalty, fallback: most_recent }
+  consent_email:    { strategy: most_restrictive }
+  consent_sms:      { strategy: most_restrictive }
+  consent_whatsapp: { strategy: most_restrictive }

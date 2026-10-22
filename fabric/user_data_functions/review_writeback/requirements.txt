@@ -1,0 +1,2 @@
+# Libraries for the user data functions item (add in the Fabric portal: Library management).
+fabric-user-data-functions
